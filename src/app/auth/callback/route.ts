@@ -31,27 +31,34 @@ export async function GET(request: Request) {
       }
     )
 
+    // 1. Exchange the temporary code for a session
+    // This is where the long-lived refresh token is set in the cookies
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
-        // Strict check: Does the profile exist?
+        // 2. Strict check: Does the profile exist?
+        // We check this here to handle the "Auto-login" experience correctly for new vs returning users
         const { data: profile } = await supabase
           .from('profiles')
           .select('id')
           .eq('id', user.id)
-          .maybeSingle() // Use maybeSingle to avoid 406 errors if missing
+          .maybeSingle() 
 
         if (!profile) {
-          // Force onboarding for new users
+          // If no profile exists, they must go to onboarding even if the session is valid
           return NextResponse.redirect(`${origin}/onboarding`)
         }
       }
+      
+      // 3. Successful login for returning user: Send to Dashboard
+      // The cookies set by exchangeCodeForSession will keep them logged in for 20 days
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
 
+  // Return the user to the login page if something went wrong
   return NextResponse.redirect(`${origin}/`)
 }
