@@ -1,3 +1,5 @@
+// src/app/onboarding/page.tsx
+
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
@@ -5,20 +7,34 @@ import { useRouter } from 'next/navigation'
 
 export default function Onboarding() {
   const [company, setCompany] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false) // New loading state
   const supabase = createClient()
   const router = useRouter()
 
   const handleSubmit = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!company.trim()) {
+      alert("Please enter a company name")
+      return
+    }
 
-    const { error } = await supabase.from('profiles').insert({
-      id: user.id,
-      company_name: company
-    })
+    setIsSubmitting(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("User session not found")
 
-    if (!error) router.push('/dashboard')
-    else alert("Error saving company name")
+      const { error } = await supabase.from('profiles').insert({
+        id: user.id,
+        company_name: company.trim()
+      })
+
+      if (error) throw error
+
+      router.push('/dashboard')
+    } catch (err: any) {
+      alert(err.message || "Error saving company name")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -32,12 +48,14 @@ export default function Onboarding() {
           onChange={(e) => setCompany(e.target.value)}
           className="w-full p-2 border border-gray-300 rounded mb-4 focus:ring-2 focus:ring-blue-500 outline-none"
           placeholder="e.g. Acme Threads"
+          disabled={isSubmitting}
         />
         <button 
           onClick={handleSubmit}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
+          disabled={isSubmitting || !company.trim()}
+          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition disabled:opacity-50"
         >
-          Finish Setup
+          {isSubmitting ? "Saving..." : "Finish Setup"}
         </button>
       </div>
     </div>

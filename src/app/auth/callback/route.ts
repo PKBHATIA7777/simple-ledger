@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
+  // Default to dashboard if no 'next' param is provided
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
@@ -33,27 +34,24 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      // Check if user has a profile record
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
+        // Strict check: Does the profile exist?
         const { data: profile } = await supabase
           .from('profiles')
           .select('id')
           .eq('id', user.id)
-          .single()
+          .maybeSingle() // Use maybeSingle to avoid 406 errors if missing
 
         if (!profile) {
-          // Redirect to onboarding if profile doesn't exist
+          // Force onboarding for new users
           return NextResponse.redirect(`${origin}/onboarding`)
         }
       }
-
-      // If profile exists (or user is somehow null), proceed to intended destination
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
 
-  // If something went wrong, redirect to home
   return NextResponse.redirect(`${origin}/`)
 }

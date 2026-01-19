@@ -1,66 +1,74 @@
 // src/app/entry/[type]/page.tsx
-
 'use client'
 
 import { useState, use } from 'react'
 import { createClient } from '@/utils/supabase/client'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 export default function EntryPage({ params }: { params: Promise<{ type: string }> }) {
-  // Unwrap the params using React.use()
   const { type } = use(params)
+  const router = useRouter()
+  const supabase = createClient()
 
+  // State Management
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [entity, setEntity] = useState('')
   const [product, setProduct] = useState('')
   const [value, setValue] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
+  // Validate the URL parameter immediately
+  const isValidType = type === 'sale' || type === 'purchase'
   const entityType = type === 'sale' ? 'customer' : 'vendor'
-  const supabase = createClient()
 
   const handleSave = async () => {
-    const { data: userData } = await supabase.auth.getUser()
-    const userId = userData.user?.id
-    if (!userId) return alert('Please login first')
+    if (!isValidType) {
+      return toast.error('Invalid transaction type')
+    }
 
-    // Get or Create Entity
-    const { data: ent, error: entErr } = await supabase
-      .from('entities')
-      .upsert(
-        { name: entity, type: entityType, user_id: userId },
-        { onConflict: 'user_id,name,type' }
-      )
-      .select()
-      .single()
+    if (!entity.trim() || !product.trim() || !value) {
+      return toast.error('Please fill in all fields')
+    }
 
-    // Get or Create Product
-    const { data: prod, error: prodErr } = await supabase
-      .from('products')
-      .upsert({ name: product, user_id: userId }, { onConflict: 'user_id,name' })
-      .select()
-      .single()
+    const numericValue = parseFloat(value)
+    if (isNaN(numericValue) || numericValue <= 0) {
+      return toast.error('Please enter a valid positive amount')
+    }
 
-    if (ent && prod) {
-      // Save Transaction
-      const { error } = await supabase.from('transactions').insert({
-        user_id: userId,
-        date: date,
-        entity_id: ent.id,
-        product_id: prod.id,
-        value: parseFloat(value),
-        type: type, // Use unwrapped 'type'
+    setIsSaving(true)
+    const toastId = toast.loading('Saving transaction...')
+
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData.user?.id
+      if (!userId) throw new Error('Please login first')
+
+      // Call the Atomic RPC instead of three separate calls
+      const { error } = await supabase.rpc('create_transaction_atomic', {
+        p_user_id: userId,
+        p_date: date,
+        p_entity_name: entity.trim(),
+        p_entity_type: entityType,
+        p_product_name: product.trim(),
+        p_value: numericValue,
+        p_type: type,
       })
 
-      if (!error) {
-        alert('Saved successfully!')
-        setEntity('')
-        setProduct('')
-        setValue('')
-      } else {
-        alert('Error saving transaction')
-      }
-    } else {
-      alert('Failed to create entity or product')
+      if (error) throw error
+
+      toast.success('Record saved successfully!', { id: toastId })
+      router.push('/dashboard')
+    } catch (error: any) {
+      console.error('Transaction Error:', error)
+      toast.error(error.message || 'An error occurred while saving', { id: toastId })
+    } finally {
+      setIsSaving(false)
     }
+  }
+
+  if (!isValidType) {
+    return <div className="p-8 text-center">Invalid Page Type</div>
   }
 
   return (
@@ -109,6 +117,8 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
             <label className="block text-sm font-semibold text-gray-500 mb-1">TOTAL VALUE (₹)</label>
             <input
               type="number"
+              min="0.01"
+              step="0.01"
               placeholder="0.00"
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -118,13 +128,14 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
 
           <button
             onClick={handleSave}
-            className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition mt-4"
+            disabled={isSaving}
+            className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition mt-4 disabled:opacity-50"
           >
-            Save Record
+            {isSaving ? 'Saving...' : 'Save Record'}
           </button>
 
           <button
-            onClick={() => window.history.back()}
+            onClick={() => router.push('/dashboard')}
             className="w-full py-2 text-gray-400 font-medium hover:text-gray-600 transition"
           >
             Cancel

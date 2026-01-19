@@ -1,12 +1,15 @@
+// src/app/entry/bulk/page.tsx
+
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 export default function BulkEntry() {
   const [rows, setRows] = useState([{ id: Date.now(), entity: '', product: '', value: '' }])
   const [duration, setDuration] = useState(new Date().toISOString().slice(0, 7)) // Default: YYYY-MM
-  const [type, setType] = useState<'sale' | 'purchase'>('sale') // New state for toggle
+  const [type, setType] = useState<'sale' | 'purchase'>('sale')
   const [isSaving, setIsSaving] = useState(false)
   
   const supabase = createClient()
@@ -25,61 +28,45 @@ export default function BulkEntry() {
   }
 
   const handleSaveAll = async () => {
+    // Filter out incomplete rows
+    const validRows = rows.filter(
+      r => r.entity.trim() && r.product.trim() && r.value && !isNaN(parseFloat(r.value)) && parseFloat(r.value) > 0
+    )
+    
+    if (validRows.length === 0) {
+      return toast.error("No valid entries to save")
+    }
+
     setIsSaving(true)
+    const toastId = toast.loading(`Saving ${validRows.length} records...`)
+
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Please login first")
 
-      const finalEntries = []
-      const entityType = type === 'sale' ? 'customer' : 'vendor'
+      // Prepare the JSON payload as expected by the RPC
+      const payload = validRows.map(row => ({
+        entity: row.entity.trim(),
+        product: row.product.trim(),
+        value: parseFloat(row.value),
+        date: `${duration}-01`, // First day of selected month
+        type: type,
+        entity_type: type === 'sale' ? 'customer' : 'vendor'
+      }))
 
-      for (const row of rows) {
-        if (!row.entity || !row.product || !row.value) continue
+      // Single RPC call for all records
+      const { error } = await supabase.rpc('process_bulk_entries', {
+        p_user_id: user.id,
+        p_entries: payload
+      })
 
-        // 1. Upsert Entity (Customer or Vendor based on type)
-        const { data: ent } = await supabase
-          .from('entities')
-          .upsert(
-            { name: row.entity, user_id: user.id, type: entityType },
-            { onConflict: 'user_id, name, type' }
-          )
-          .select()
-          .single()
+      if (error) throw error
 
-        // 2. Upsert Product
-        const { data: prod } = await supabase
-          .from('products')
-          .upsert(
-            { name: row.product, user_id: user.id },
-            { onConflict: 'user_id, name' }
-          )
-          .select()
-          .single()
-
-        if (ent && prod) {
-          finalEntries.push({
-            user_id: user.id,
-            date: `${duration}-01`, // First day of selected month
-            entity_id: ent.id,
-            product_id: prod.id,
-            value: parseFloat(row.value),
-            type: type // Dynamic: 'sale' or 'purchase'
-          })
-        }
-      }
-
-      // 3. Bulk Insert Transactions
-      if (finalEntries.length > 0) {
-        const { error } = await supabase.from('transactions').insert(finalEntries)
-        if (error) throw error
-        alert(`${finalEntries.length} records saved successfully!`)
-        router.push('/dashboard')
-      } else {
-        alert("No valid entries to save.")
-      }
+      toast.success(`${validRows.length} records saved successfully!`, { id: toastId })
+      router.push('/dashboard')
     } catch (err: any) {
-      console.error(err)
-      alert(err.message || "An error occurred while saving.")
+      console.error('Bulk Save Error:', err)
+      toast.error(err.message || "An error occurred while saving", { id: toastId })
     } finally {
       setIsSaving(false)
     }
@@ -157,6 +144,8 @@ export default function BulkEntry() {
                   <input 
                     className="w-full p-2 bg-transparent outline-none border-b border-transparent focus:border-blue-400 font-medium" 
                     type="number" 
+                    min="0.01"
+                    step="0.01"
                     placeholder="0.00" 
                     value={row.value} 
                     onChange={(e) => updateRow(row.id, 'value', e.target.value)} 
@@ -204,6 +193,8 @@ export default function BulkEntry() {
             <input 
               className="w-full p-2 border-b font-bold outline-none focus:border-blue-500" 
               type="number" 
+              min="0.01"
+              step="0.01"
               placeholder="Value" 
               value={row.value} 
               onChange={(e) => updateRow(row.id, 'value', e.target.value)} 

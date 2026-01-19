@@ -6,10 +6,11 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 export default function Dashboard() {
   const [companyName, setCompanyName] = useState('Loading...')
-  const [stats, setStats] = useState({ sales: 0, purchases: 0 }) // New state for totals
+  const [stats, setStats] = useState({ sales: 0, purchases: 0 })
   const supabase = createClient()
   const router = useRouter()
 
@@ -17,51 +18,41 @@ export default function Dashboard() {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        setCompanyName('Guest')
+        router.push('/')
         return
       }
 
-      // 1. Fetch Profile Name
+      // 1. Fetch Profile and check onboarding status
       const { data: profile } = await supabase
         .from('profiles')
         .select('company_name')
         .eq('id', user.id)
-        .single()
+        .maybeSingle()
 
-      if (profile?.company_name) {
-        setCompanyName(profile.company_name)
-      } else {
-        setCompanyName('My Business')
+      if (!profile) {
+        router.push('/onboarding')
+        return
       }
 
-      // 2. Fetch current month's transactions for stats
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+      setCompanyName(profile.company_name)
 
-      const { data: transactions } = await supabase
-        .from('transactions')
-        .select('value, type')
-        .eq('user_id', user.id)
-        .gte('date', startOfMonth)
+      // 2. Fetch Optimized Stats via RPC
+      const { data, error } = await supabase.rpc('get_monthly_stats', {
+        p_user_id: user.id,
+      })
 
-      if (transactions) {
-        const totals = transactions.reduce(
-          (acc, curr) => {
-            if (curr.type === 'sale') {
-              acc.sales += Number(curr.value)
-            } else if (curr.type === 'purchase') {
-              acc.purchases += Number(curr.value)
-            }
-            return acc
-          },
-          { sales: 0, purchases: 0 }
-        )
-        setStats(totals)
+      if (error) {
+        toast.error('Failed to load statistics')
+      } else if (data && data.length > 0) {
+        setStats({
+          sales: Number(data[0].total_sales),
+          purchases: Number(data[0].total_purchases),
+        })
       }
     }
 
     fetchData()
-  }, [])
+  }, [router, supabase])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -84,7 +75,6 @@ export default function Dashboard() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Sales Action */}
         <Link
           href="/entry/sale"
           className="p-6 bg-green-600 rounded-2xl shadow-sm hover:shadow-md transition text-white"
@@ -96,7 +86,6 @@ export default function Dashboard() {
           <div className="mt-4 text-2xl">→</div>
         </Link>
 
-        {/* Purchase Action */}
         <Link
           href="/entry/purchase"
           className="p-6 bg-blue-600 rounded-2xl shadow-sm hover:shadow-md transition text-white"
@@ -110,13 +99,22 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-8 grid grid-cols-3 gap-2">
-        <Link href="/reports" className="p-4 bg-white border rounded-xl text-center text-sm font-medium">
+        <Link
+          href="/reports"
+          className="p-4 bg-white border rounded-xl text-center text-sm font-medium"
+        >
           Reports
         </Link>
-        <Link href="/entities" className="p-4 bg-white border rounded-xl text-center text-sm font-medium">
+        <Link
+          href="/entities"
+          className="p-4 bg-white border rounded-xl text-center text-sm font-medium"
+        >
           Contacts
         </Link>
-        <Link href="/products" className="p-4 bg-white border rounded-xl text-center text-sm font-medium">
+        <Link
+          href="/products"
+          className="p-4 bg-white border rounded-xl text-center text-sm font-medium"
+        >
           Products
         </Link>
       </div>
