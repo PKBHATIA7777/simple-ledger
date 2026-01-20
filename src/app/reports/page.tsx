@@ -15,6 +15,7 @@ export default function ReportsPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>(
     new Date().toISOString().slice(0, 7) // e.g., "2026-01"
   )
+  const [exportType, setExportType] = useState<'all' | 'sale' | 'purchase'>('all')
   const supabase = createClient()
 
   useEffect(() => {
@@ -35,13 +36,12 @@ export default function ReportsPage() {
       }
 
       if (transactions) {
-        // Split data based on the 'type' column
         const sales = transactions.filter((t: any) => t.type === 'sale')
         const purchases = transactions.filter((t: any) => t.type === 'purchase')
 
         setSalesData(sales)
         setPurchaseData(purchases)
-        setData(transactions) // Keeping original state for backward compatibility
+        setData(transactions)
       }
     }
 
@@ -60,7 +60,6 @@ export default function ReportsPage() {
         .eq('id', id)
 
       if (!error) {
-        // Update all three states to stay in sync
         setData((prev) => prev.filter((item) => item.id !== id))
         setSalesData((prev) => prev.filter((item) => item.id !== id))
         setPurchaseData((prev) => prev.filter((item) => item.id !== id))
@@ -75,33 +74,32 @@ export default function ReportsPage() {
   ======================= */
 
   const exportToExcel = () => {
-    // Prepare Sales Data
-    const excelSales = salesData.map((item) => ({
-      Product: item.products?.name,
-      Entity: item.entities?.name,
-      Value: item.value,
-      Date: item.date,
-    }))
-
-    // Prepare Purchase Data
-    const excelPurchases = purchaseData.map((item) => ({
-      Product: item.products?.name,
-      Entity: item.entities?.name,
-      Value: item.value,
-      Date: item.date,
-    }))
-
     const wb = utils.book_new()
-    
-    // Add Sales Sheet
-    const wsSales = utils.json_to_sheet(excelSales)
-    utils.book_append_sheet(wb, wsSales, 'Sales')
 
-    // Add Purchase Sheet
-    const wsPurchases = utils.json_to_sheet(excelPurchases)
-    utils.book_append_sheet(wb, wsPurchases, 'Purchases')
+    // Helper to map data without the 'Date' field
+    const mapData = (items: any[]) =>
+      items.map((item) => ({
+        Product: item.products?.name || '—',
+        Entity: item.entities?.name || '—',
+        Value: item.value,
+      }))
 
-    const fileName = `Business_Report_${selectedMonth}.xlsx`
+    // Conditionally add Sales sheet
+    if (exportType === 'all' || exportType === 'sale') {
+      const wsSales = utils.json_to_sheet(mapData(salesData))
+      utils.book_append_sheet(wb, wsSales, 'Sales')
+    }
+
+    // Conditionally add Purchase sheet
+    if (exportType === 'all' || exportType === 'purchase') {
+      const wsPurchases = utils.json_to_sheet(mapData(purchaseData))
+      utils.book_append_sheet(wb, wsPurchases, 'Purchases')
+    }
+
+    // Dynamic filename based on selection
+    const typeLabel = exportType === 'all' ? 'Full' : exportType === 'sale' ? 'Sales' : 'Purchases'
+    const fileName = `${typeLabel}_Report_${selectedMonth}.xlsx`
+
     writeFile(wb, fileName)
   }
 
@@ -113,48 +111,52 @@ export default function ReportsPage() {
     doc.setFontSize(18)
     doc.text(`Monthly Business Report - ${monthName}`, 14, 15)
 
-    // --- Sales Table ---
-    doc.setFontSize(14)
-    doc.setTextColor(21, 128, 61) // Green for Sales
-    doc.text('Sales Report', 14, 25)
-    
-    autoTable(doc, {
-      startY: 28,
-      head: [['Product', 'Customer', 'Value', 'Date']],
-      body: salesData.map((item) => [
-        item.products?.name || '—',
-        item.entities?.name || '—',
-        `INR ${Number(item.value).toLocaleString()}`,
-        item.date
-      ]),
-    })
+    let currentY = 25
 
-    // --- Purchase Table ---
-    const finalY = (doc as any).lastAutoTable.finalY || 30
-    doc.setFontSize(14)
-    doc.setTextColor(185, 28, 28) // Red for Purchase
-    doc.text('Purchase Report', 14, finalY + 15)
+    // --- Sales Table (Conditional) ---
+    if (exportType === 'all' || exportType === 'sale') {
+      doc.setFontSize(14)
+      doc.setTextColor(21, 128, 61)
+      doc.text('Sales Report', 14, currentY)
 
-    autoTable(doc, {
-      startY: finalY + 18,
-      head: [['Product', 'Vendor', 'Value', 'Date']],
-      body: purchaseData.map((item) => [
-        item.products?.name || '—',
-        item.entities?.name || '—',
-        `INR ${Number(item.value).toLocaleString()}`,
-        item.date
-      ]),
-    })
+      autoTable(doc, {
+        startY: currentY + 3,
+        head: [['Product', 'Customer', 'Value']],
+        body: salesData.map((item) => [
+          item.products?.name || '—',
+          item.entities?.name || '—',
+          `INR ${Number(item.value).toLocaleString()}`,
+        ]),
+      })
+      currentY = (doc as any).lastAutoTable.finalY + 15
+    }
 
-    const fileName = `Report_${selectedMonth}.pdf`
+    // --- Purchase Table (Conditional) ---
+    if (exportType === 'all' || exportType === 'purchase') {
+      doc.setFontSize(14)
+      doc.setTextColor(185, 28, 28)
+      doc.text('Purchase Report', 14, currentY)
+
+      autoTable(doc, {
+        startY: currentY + 3,
+        head: [['Product', 'Vendor', 'Value']],
+        body: purchaseData.map((item) => [
+          item.products?.name || '—',
+          item.entities?.name || '—',
+          `INR ${Number(item.value).toLocaleString()}`,
+        ]),
+      })
+    }
+
+    const typeLabel = exportType === 'all' ? 'Full' : exportType === 'sale' ? 'Sales' : 'Purchases'
+    const fileName = `${typeLabel}_Report_${selectedMonth}.pdf`
     doc.save(fileName)
   }
 
   /* =======================
-     GROUPING LOGIC (UI) - Updated
+     GROUPING LOGIC (UI)
   ======================= */
 
-  // Grouping helper function to avoid repetition
   const groupTransactions = (transactions: any[]) => {
     return transactions.reduce((acc: any, item: any) => {
       const category = item.products?.name || 'Unknown'
@@ -167,11 +169,9 @@ export default function ReportsPage() {
     }, {})
   }
 
-  // Create two separate grouped objects
   const groupedSales = groupTransactions(salesData)
   const groupedPurchases = groupTransactions(purchaseData)
 
-  // Calculate grand totals for quick reference in the UI
   const totalSales = salesData.reduce((sum, item) => sum + Number(item.value), 0)
   const totalPurchases = purchaseData.reduce((sum, item) => sum + Number(item.value), 0)
 
@@ -180,7 +180,6 @@ export default function ReportsPage() {
     year: 'numeric',
   })
 
-  // Helper function to render grouped tables
   function renderTables(groupedObj: any) {
     return Object.keys(groupedObj).map((category) => (
       <div key={category} className="mb-6 border rounded-lg overflow-hidden shadow-sm">
@@ -196,10 +195,7 @@ export default function ReportsPage() {
           <tbody>
             {groupedObj[category].items.map((entry: any) => (
               <tr key={entry.id} className="border-t hover:bg-gray-50 transition">
-                <td className="p-3 text-gray-600">
-                  <div className="text-xs text-gray-400 mb-1">{entry.date}</div>
-                  {entry.entities?.name || '—'}
-                </td>
+                <td className="p-3 text-gray-600">{entry.entities?.name || '—'}</td>
                 <td className="p-3 text-right">
                   <div className="text-gray-900 font-medium">
                     ₹{Number(entry.value).toLocaleString()}
@@ -225,12 +221,23 @@ export default function ReportsPage() {
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 gap-4">
         <div>
           <h1 className="text-xl font-bold">Business Report</h1>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="mt-1 p-2 border rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="flex gap-2 mt-1">
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="p-2 border rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <select
+              value={exportType}
+              onChange={(e) => setExportType(e.target.value as any)}
+              className="p-2 border rounded-lg text-sm font-medium bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Export: All</option>
+              <option value="sale">Export: Sales Only</option>
+              <option value="purchase">Export: Purchases Only</option>
+            </select>
+          </div>
         </div>
 
         <div className="flex gap-3">
@@ -250,42 +257,46 @@ export default function ReportsPage() {
       </div>
 
       {/* SALES SECTION */}
-      <section className="mb-12">
-        <div className="flex justify-between items-end mb-4">
-          <h2 className="text-2xl font-black text-green-700 uppercase tracking-tight">Sales Report</h2>
-          <div className="text-right">
-            <p className="text-xs text-gray-400 font-bold uppercase">Total Sales</p>
-            <p className="text-xl font-bold text-gray-900">₹{totalSales.toLocaleString()}</p>
+      {(exportType === 'all' || exportType === 'sale') && (
+        <section className="mb-12">
+          <div className="flex justify-between items-end mb-4">
+            <h2 className="text-2xl font-black text-green-700 uppercase tracking-tight">Sales Report</h2>
+            <div className="text-right">
+              <p className="text-xs text-gray-400 font-bold uppercase">Total Sales</p>
+              <p className="text-xl font-bold text-gray-900">₹{totalSales.toLocaleString()}</p>
+            </div>
           </div>
-        </div>
 
-        {Object.keys(groupedSales).length > 0 ? (
-          renderTables(groupedSales)
-        ) : (
-          <p className="text-gray-500 italic border rounded-lg p-4 bg-gray-50">
-            No sales recorded for {displayMonth}.
-          </p>
-        )}
-      </section>
+          {Object.keys(groupedSales).length > 0 ? (
+            renderTables(groupedSales)
+          ) : (
+            <p className="text-gray-500 italic border rounded-lg p-4 bg-gray-50">
+              No sales recorded for {displayMonth}.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* PURCHASE SECTION */}
-      <section className="mb-12">
-        <div className="flex justify-between items-end mb-4">
-          <h2 className="text-2xl font-black text-red-700 uppercase tracking-tight">Purchase Report</h2>
-          <div className="text-right">
-            <p className="text-xs text-gray-400 font-bold uppercase">Total Purchases</p>
-            <p className="text-xl font-bold text-gray-900">₹{totalPurchases.toLocaleString()}</p>
+      {(exportType === 'all' || exportType === 'purchase') && (
+        <section className="mb-12">
+          <div className="flex justify-between items-end mb-4">
+            <h2 className="text-2xl font-black text-red-700 uppercase tracking-tight">Purchase Report</h2>
+            <div className="text-right">
+              <p className="text-xs text-gray-400 font-bold uppercase">Total Purchases</p>
+              <p className="text-xl font-bold text-gray-900">₹{totalPurchases.toLocaleString()}</p>
+            </div>
           </div>
-        </div>
 
-        {Object.keys(groupedPurchases).length > 0 ? (
-          renderTables(groupedPurchases)
-        ) : (
-          <p className="text-gray-500 italic border rounded-lg p-4 bg-gray-50">
-            No purchases recorded for {displayMonth}.
-          </p>
-        )}
-      </section>
+          {Object.keys(groupedPurchases).length > 0 ? (
+            renderTables(groupedPurchases)
+          ) : (
+            <p className="text-gray-500 italic border rounded-lg p-4 bg-gray-50">
+              No purchases recorded for {displayMonth}.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   )
 }
