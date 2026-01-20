@@ -1,7 +1,7 @@
 // src/app/entry/[type]/page.tsx
 'use client'
 
-import { useState, use } from 'react'
+import { useState, use, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -18,9 +18,50 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
   const [value, setValue] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
-  // Validate the URL parameter immediately
+  // Suggestion States
+  const [existingEntities, setExistingEntities] = useState<{ name: string }[]>([])
+  const [existingProducts, setExistingProducts] = useState<{ name: string }[]>([])
+
   const isValidType = type === 'sale' || type === 'purchase'
   const entityType = type === 'sale' ? 'customer' : 'vendor'
+
+  // Fetch suggestions on load
+  useEffect(() => {
+    async function loadSuggestions() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Fetch entities based on the current transaction type
+      const { data: entData, error: entError } = await supabase
+        .from('entities')
+        .select('name')
+        .eq('type', entityType)
+        .order('name')
+
+      if (entError) {
+        console.error('Error fetching entities:', entError)
+        return
+      }
+
+      // Fetch all products
+      const { data: prodData, error: prodError } = await supabase
+        .from('products')
+        .select('name')
+        .order('name')
+
+      if (prodError) {
+        console.error('Error fetching products:', prodError)
+        return
+      }
+
+      setExistingEntities(entData || [])
+      setExistingProducts(prodData || [])
+    }
+
+    if (isValidType) {
+      loadSuggestions()
+    }
+  }, [isValidType, entityType, supabase])
 
   const handleSave = async () => {
     if (!isValidType) {
@@ -44,7 +85,6 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
       const userId = userData.user?.id
       if (!userId) throw new Error('Please login first')
 
-      // Call the Atomic RPC instead of three separate calls
       const { error } = await supabase.rpc('create_transaction_atomic', {
         p_user_id: userId,
         p_date: date,
@@ -94,23 +134,35 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
               {type === 'sale' ? 'CUSTOMER NAME' : 'VENDOR NAME'}
             </label>
             <input
+              list="entity-options"
               type="text"
-              placeholder="Enter name..."
+              placeholder="Select or enter name..."
               value={entity}
               onChange={(e) => setEntity(e.target.value)}
               className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <datalist id="entity-options">
+              {existingEntities.map((item, index) => (
+                <option key={index} value={item.name} />
+              ))}
+            </datalist>
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-gray-500 mb-1">PRODUCT</label>
             <input
+              list="product-options"
               type="text"
               placeholder="What was sold/bought?"
               value={product}
               onChange={(e) => setProduct(e.target.value)}
               className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <datalist id="product-options">
+              {existingProducts.map((item, index) => (
+                <option key={index} value={item.name} />
+              ))}
+            </datalist>
           </div>
 
           <div>
