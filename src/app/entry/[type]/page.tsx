@@ -13,14 +13,16 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
 
   // State Management
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [entity, setEntity] = useState('')
-  const [product, setProduct] = useState('')
+  const [selectedEntity, setSelectedEntity] = useState<{ id: string; name: string } | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string } | null>(null)
+  const [entitySearch, setEntitySearch] = useState('')
+  const [productSearch, setProductSearch] = useState('')
   const [value, setValue] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
   // Suggestion States
-  const [existingEntities, setExistingEntities] = useState<{ name: string }[]>([])
-  const [existingProducts, setExistingProducts] = useState<{ name: string }[]>([])
+  const [entities, setEntities] = useState<{ id: string; name: string }[]>([])
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([])
 
   const isValidType = type === 'sale' || type === 'purchase'
   const entityType = type === 'sale' ? 'customer' : 'vendor'
@@ -31,10 +33,10 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Fetch entities based on the current transaction type
+      // Fetch entities
       const { data: entData, error: entError } = await supabase
         .from('entities')
-        .select('name')
+        .select('id, name')
         .eq('type', entityType)
         .order('name')
 
@@ -43,10 +45,10 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
         return
       }
 
-      // Fetch all products
+      // Fetch products
       const { data: prodData, error: prodError } = await supabase
         .from('products')
-        .select('name')
+        .select('id, name')
         .order('name')
 
       if (prodError) {
@@ -54,8 +56,8 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
         return
       }
 
-      setExistingEntities(entData || [])
-      setExistingProducts(prodData || [])
+      setEntities(entData || [])
+      setProducts(prodData || [])
     }
 
     if (isValidType) {
@@ -68,7 +70,10 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
       return toast.error('Invalid transaction type')
     }
 
-    if (!entity.trim() || !product.trim() || !value) {
+    const entityName = selectedEntity?.name.trim()
+    const productName = selectedProduct?.name.trim()
+
+    if (!entityName || !productName || !value) {
       return toast.error('Please fill in all fields')
     }
 
@@ -83,22 +88,30 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
     try {
       const { data: userData } = await supabase.auth.getUser()
       const userId = userData.user?.id
-      if (!userId) throw new Error('Please login first')
+      if (!userId) throw new Error('Please log in first')
 
       const { error } = await supabase.rpc('create_transaction_atomic', {
         p_user_id: userId,
         p_date: date,
-        p_entity_name: entity.trim(),
+        p_entity_name: entityName,
         p_entity_type: entityType,
-        p_product_name: product.trim(),
+        p_product_name: productName,
         p_value: numericValue,
         p_type: type,
       })
 
       if (error) throw error
 
-      toast.success('Record saved successfully!', { id: toastId })
-      router.push('/dashboard')
+      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} record added!`, { id: toastId })
+
+      // ✅ Reset form but keep date
+      setSelectedEntity(null)
+      setSelectedProduct(null)
+      setValue('')
+      setEntitySearch('')
+      setProductSearch('')
+      // Date remains unchanged
+
     } catch (error: any) {
       console.error('Transaction Error:', error)
       toast.error(error.message || 'An error occurred while saving', { id: toastId })
@@ -119,6 +132,7 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
         </h1>
 
         <div className="space-y-4">
+          {/* Date */}
           <div>
             <label className="block text-sm font-semibold text-gray-500 mb-1">DATE</label>
             <input
@@ -129,42 +143,103 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
             />
           </div>
 
+          {/* Entity Selection */}
           <div>
             <label className="block text-sm font-semibold text-gray-500 mb-1">
               {type === 'sale' ? 'CUSTOMER NAME' : 'VENDOR NAME'}
             </label>
-            <input
-              list="entity-options"
-              type="text"
-              placeholder="Select or enter name..."
-              value={entity}
-              onChange={(e) => setEntity(e.target.value)}
-              className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <datalist id="entity-options">
-              {existingEntities.map((item, index) => (
-                <option key={index} value={item.name} />
-              ))}
-            </datalist>
+            {!selectedEntity ? (
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder={`Search ${entityType}...`}
+                  value={entitySearch}
+                  onChange={(e) => setEntitySearch(e.target.value)}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {entitySearch && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    {entities
+                      .filter(e => e.name.toLowerCase().includes(entitySearch.toLowerCase()))
+                      .map(entity => (
+                        <button
+                          key={entity.id}
+                          onClick={() => {
+                            setSelectedEntity(entity)
+                            setEntitySearch('')
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                        >
+                          {entity.name}
+                        </button>
+                      ))}
+                    {entities.filter(e => e.name.toLowerCase().includes(entitySearch.toLowerCase())).length === 0 && (
+                      <div className="px-4 py-2 text-gray-500 text-sm">No results found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <span className="text-blue-700 font-medium">{selectedEntity.name}</span>
+                <button
+                  onClick={() => setSelectedEntity(null)}
+                  className="text-blue-400 hover:text-blue-600 font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
 
+          {/* Product Selection */}
           <div>
             <label className="block text-sm font-semibold text-gray-500 mb-1">PRODUCT</label>
-            <input
-              list="product-options"
-              type="text"
-              placeholder="What was sold/bought?"
-              value={product}
-              onChange={(e) => setProduct(e.target.value)}
-              className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <datalist id="product-options">
-              {existingProducts.map((item, index) => (
-                <option key={index} value={item.name} />
-              ))}
-            </datalist>
+            {!selectedProduct ? (
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="What was sold/bought?"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {productSearch && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-auto">
+                    {products
+                      .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                      .map(product => (
+                        <button
+                          key={product.id}
+                          onClick={() => {
+                            setSelectedProduct(product)
+                            setProductSearch('')
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                        >
+                          {product.name}
+                        </button>
+                      ))}
+                    {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                      <div className="px-4 py-2 text-gray-500 text-sm">No results found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+                <span className="text-green-700 font-medium">{selectedProduct.name}</span>
+                <button
+                  onClick={() => setSelectedProduct(null)}
+                  className="text-green-400 hover:text-green-600 font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
 
+          {/* Value */}
           <div>
             <label className="block text-sm font-semibold text-gray-500 mb-1">TOTAL VALUE (₹)</label>
             <input
@@ -178,6 +253,7 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
             />
           </div>
 
+          {/* Save Button */}
           <button
             onClick={handleSave}
             disabled={isSaving}
@@ -186,6 +262,7 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
             {isSaving ? 'Saving...' : 'Save Record'}
           </button>
 
+          {/* Cancel Button */}
           <button
             onClick={() => router.push('/dashboard')}
             className="w-full py-2 text-gray-400 font-medium hover:text-gray-600 transition"
