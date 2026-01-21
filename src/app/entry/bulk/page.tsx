@@ -213,7 +213,7 @@ export default function BulkEntry() {
         <button 
           onClick={handleSaveAll} 
           disabled={isSaving}
-          className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition disabled:opacity-50"
+          className="flex-1 py-4 bg-blue-600 text-primary-action rounded-2xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition disabled:opacity-50"
         >
           {isSaving ? "Saving..." : "Save All Entries"}
         </button>

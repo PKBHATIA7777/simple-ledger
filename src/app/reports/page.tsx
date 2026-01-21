@@ -220,7 +220,7 @@ export default function ReportsPage() {
           <button
             onClick={() => setReportType('sale')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-              reportType === 'sale' ? 'bg-green-600 text-white' : 'text-gray-500'
+              reportType === 'sale' ? 'bg-green-600 text-primary-action' : 'text-gray-500'
             }`}
           >
             Sales
@@ -228,7 +228,7 @@ export default function ReportsPage() {
           <button
             onClick={() => setReportType('purchase')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-              reportType === 'purchase' ? 'bg-blue-600 text-white' : 'text-gray-500'
+              reportType === 'purchase' ? 'bg-blue-600 text-primary-action' : 'text-gray-500'
             }`}
           >
             Purchases
@@ -272,7 +272,7 @@ export default function ReportsPage() {
           </div>
         </div>
         <div
-          className={`p-4 rounded-xl shadow-sm text-white ${
+          className={`p-4 rounded-xl shadow-sm text-primary-action ${
             reportType === 'sale' ? 'bg-green-600' : 'bg-blue-600'
           }`}
         >

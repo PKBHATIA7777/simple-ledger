@@ -24,3 +24,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+@layer components {
+  .text-primary-action {
+    @apply text-slate-50; /* Or any color that works best for you */
+  }
+}

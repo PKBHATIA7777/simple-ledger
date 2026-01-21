@@ -53,7 +53,7 @@ export default function Onboarding() {
         <button 
           onClick={handleSubmit}
           disabled={isSubmitting || !company.trim()}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition disabled:opacity-50"
+          className="w-full bg-blue-600 text-primary-action py-2 rounded hover:bg-blue-700 transition disabled:opacity-50"
         >
           {isSubmitting ? "Saving..." : "Finish Setup"}
         </button>

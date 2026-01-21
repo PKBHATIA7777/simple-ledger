@@ -257,7 +257,7 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition mt-4 disabled:opacity-50"
+            className="w-full py-4 bg-blue-600 text-primary-action rounded-xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition mt-4 disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save Record'}
           </button>

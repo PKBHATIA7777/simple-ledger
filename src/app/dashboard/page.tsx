@@ -77,7 +77,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Link
           href="/entry/sale"
-          className="p-6 bg-green-600 rounded-2xl shadow-sm hover:shadow-md transition text-white"
+          className="p-6 bg-green-600 rounded-2xl shadow-sm hover:shadow-md transition text-primary-action"
         >
           <h2 className="text-lg font-bold">Sales Record</h2>
           <p className="text-green-100 text-sm font-medium">
@@ -88,7 +88,7 @@ export default function Dashboard() {
 
         <Link
           href="/entry/purchase"
-          className="p-6 bg-blue-600 rounded-2xl shadow-sm hover:shadow-md transition text-white"
+          className="p-6 bg-blue-600 rounded-2xl shadow-sm hover:shadow-md transition text-primary-action"
         >
           <h2 className="text-lg font-bold">Purchase Record</h2>
           <p className="text-blue-100 text-sm font-medium">
