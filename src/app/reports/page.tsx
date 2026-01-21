@@ -41,12 +41,23 @@ export default function ReportsPage() {
       toast.error(`Failed to load ${reportType} report`)
       setTransactions([])
     } else {
+      console.log("Fetched transactions:", data);
       setTransactions(data || [])
+      
+      // Debug: Check for missing IDs
+      data?.forEach((t, i) => {
+        if (!t.products?.id) {
+          console.warn(`Transaction ${i + 1}: Missing products.id →`, t);
+        }
+        if (!t.entities?.id) {
+          console.warn(`Transaction ${i + 1}: Missing entities.id →`, t);
+        }
+      });
     }
     setLoading(false)
   }
 
-  // === FIXED Grouping and Sorting Logic ===
+  // === FIXED Grouping and Sorting Logic (Robust Version) ===
   const groupedData = (() => {
     if (!transactions.length) return { products: [], grandTotal: 0 };
 
@@ -54,26 +65,24 @@ export default function ReportsPage() {
     let grandTotal = 0;
 
     transactions.forEach((t) => {
-      const productId = t.products?.id || 'unknown';
-      const productName = t.products?.name || 'Unknown Product';
-      const entityId = t.entities?.id || 'unknown';
-      const entityName = t.entities?.name || 'Unknown Entity';
+      const productId = t.products?.id ?? 'unknown_' + Math.random().toString(36).substr(2, 9);
+      const productName = t.products?.name?.trim() || 'Unknown Product';
+      const entityId = t.entities?.id ?? 'unknown_' + Math.random().toString(36).substr(2, 9);
+      const entityName = t.entities?.name?.trim() || 'Unknown Entity';
       const amount = Number(t.value);
 
       grandTotal += amount;
 
-      // Ensure every unique product has its own entry in the map
       if (!productMap[productId]) {
         productMap[productId] = {
           name: productName,
           totalAmount: 0,
-          entities: {} // This must be unique per productId
+          entities: {}
         };
       }
 
       productMap[productId].totalAmount += amount;
 
-      // Group entities (customers/vendors) specifically under this product
       if (!productMap[productId].entities[entityId]) {
         productMap[productId].entities[entityId] = {
           name: entityName,
@@ -85,12 +94,10 @@ export default function ReportsPage() {
       productMap[productId].entities[entityId].count += 1;
     });
 
-    // Convert the map to an array and sort by total amount
     const sortedProducts = Object.values(productMap)
       .sort((a, b) => b.totalAmount - a.totalAmount)
       .map((product) => ({
         ...product,
-        // Convert the nested entities object into a sorted list for the tables
         entities: Object.values(product.entities).sort((a: any, b: any) => b.amount - a.amount)
       }));
 
@@ -107,22 +114,20 @@ export default function ReportsPage() {
     const reportYear = new Date(startDate).getFullYear();
     const reportHeading = `${reportType === 'sale' ? 'Sales' : 'Purchase'} - ${reportMonth} ${reportYear}`;
 
-    // 1. Prepare Mini Table Data (Product Summary)
     const summaryRows = [
       [reportHeading],
       [`Total ${reportType === 'sale' ? 'Sales' : 'Purchases'}: ${groupedData.grandTotal}`],
-      [], // Gap
-      ['S.No', 'Product Name', 'Total Amount'], // Header
+      [],
+      ['S.No', 'Product Name', 'Total Amount'],
       ...groupedData.products.map((p, i) => [i + 1, p.name, p.totalAmount])
     ];
 
-    // 2. Prepare Detailed Product Tables Data
-    const detailRows: any[] = [[]]; // Start with a gap after the summary
+    const detailRows: any[] = [[]];
 
     groupedData.products.forEach((product) => {
-      detailRows.push([]); // Spacer
+      detailRows.push([]);
       detailRows.push([`${reportType === 'sale' ? 'Sales' : 'Purchase'} of ${product.name} in ${reportMonth} ${reportYear}`]);
-      detailRows.push(['S.No', reportType === 'sale' ? 'Customer Name' : 'Vendor Name', 'Amount']); // Header
+      detailRows.push(['S.No', reportType === 'sale' ? 'Customer Name' : 'Vendor Name', 'Amount']);
       
       product.entities.forEach((ent: any, index: number) => {
         const amountDisplay = ent.count > 1 
@@ -132,11 +137,9 @@ export default function ReportsPage() {
       });
     });
 
-    // 3. Combine and Create Worksheet
     const finalData = [...summaryRows, ...detailRows];
     const worksheet = XLSX.utils.aoa_to_sheet(finalData);
     const workbook = XLSX.utils.book_new();
-    
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
     XLSX.writeFile(workbook, `${reportHeading.replace(/\s+/g, '_')}.xlsx`);
   }
@@ -148,18 +151,15 @@ export default function ReportsPage() {
       "July", "August", "September", "October", "November", "December"
     ];
     
-    // 1. Setup Header Logic
     const reportMonth = monthNames[new Date(startDate).getMonth()];
     const reportYear = new Date(startDate).getFullYear();
     const title = `${reportType === 'sale' ? 'Sales' : 'Purchase'} - ${reportMonth} ${reportYear}`;
     
     doc.setFontSize(18);
     doc.text(title, 14, 15);
-    
     doc.setFontSize(12);
     doc.text(`Total ${reportType === 'sale' ? 'Sales' : 'Purchases'}: ₹${groupedData.grandTotal.toLocaleString()}`, 14, 22);
 
-    // 2. Mini Table (Product Summary)
     autoTable(doc, {
       startY: 30,
       head: [['S.No', 'Product Name', 'Total Amount']],
@@ -172,7 +172,6 @@ export default function ReportsPage() {
       margin: { bottom: 10 }
     });
 
-    // 3. Detailed Product Tables
     let finalY = (doc as any).lastAutoTable.finalY + 15;
 
     groupedData.products.forEach((product: any) => {
@@ -285,7 +284,7 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Transactions Table (Flat List – as originally designed) */}
+      {/* Transactions Table */}
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-gray-50 border-b text-[10px] font-bold text-gray-400 uppercase">
