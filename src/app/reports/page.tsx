@@ -46,7 +46,7 @@ export default function ReportsPage() {
     setLoading(false)
   }
 
-  // === Grouping and Sorting Logic (Step 2 & 3) ===
+  // === FIXED Grouping and Sorting Logic ===
   const groupedData = (() => {
     if (!transactions.length) return { products: [], grandTotal: 0 };
 
@@ -62,16 +62,18 @@ export default function ReportsPage() {
 
       grandTotal += amount;
 
+      // Ensure every unique product has its own entry in the map
       if (!productMap[productId]) {
         productMap[productId] = {
           name: productName,
           totalAmount: 0,
-          entities: {}
+          entities: {} // This must be unique per productId
         };
       }
 
       productMap[productId].totalAmount += amount;
 
+      // Group entities (customers/vendors) specifically under this product
       if (!productMap[productId].entities[entityId]) {
         productMap[productId].entities[entityId] = {
           name: entityName,
@@ -83,10 +85,12 @@ export default function ReportsPage() {
       productMap[productId].entities[entityId].count += 1;
     });
 
+    // Convert the map to an array and sort by total amount
     const sortedProducts = Object.values(productMap)
       .sort((a, b) => b.totalAmount - a.totalAmount)
       .map((product) => ({
         ...product,
+        // Convert the nested entities object into a sorted list for the tables
         entities: Object.values(product.entities).sort((a: any, b: any) => b.amount - a.amount)
       }));
 
@@ -159,7 +163,6 @@ export default function ReportsPage() {
     autoTable(doc, {
       startY: 30,
       head: [['S.No', 'Product Name', 'Total Amount']],
-      // Fix: Explicitly type p as any and index as number
       body: groupedData.products.map((p: any, index: number) => [
         index + 1,
         p.name,
@@ -172,9 +175,7 @@ export default function ReportsPage() {
     // 3. Detailed Product Tables
     let finalY = (doc as any).lastAutoTable.finalY + 15;
 
-    // Fix: Explicitly type product as any
     groupedData.products.forEach((product: any) => {
-      // Check if we need a new page for the next product table
       if (finalY > 240) {
         doc.addPage();
         finalY = 20;
@@ -187,7 +188,6 @@ export default function ReportsPage() {
       autoTable(doc, {
         startY: finalY + 5,
         head: [['S.No', reportType === 'sale' ? 'Customer Name' : 'Vendor Name', 'Amount']],
-        // Fix: Explicitly type ent as any and index as number
         body: product.entities.map((ent: any, index: number) => [
           index + 1,
           ent.name,
