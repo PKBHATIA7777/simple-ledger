@@ -28,6 +28,7 @@ body {
 
 @layer components {
   .text-primary-action {
-    @apply text-slate-50; /* Or any color that works best for you */
+    /* Using a deep slate/black for maximum readability on white/light backgrounds */
+    @apply text-slate-900; 
   }
 }
