@@ -44,7 +44,6 @@ export default function ReportsPage() {
       console.log("Fetched transactions:", data);
       setTransactions(data || [])
       
-      // Debug: Check for missing IDs
       data?.forEach((t, i) => {
         if (!t.products?.id) {
           console.warn(`Transaction ${i + 1}: Missing products.id →`, t);
@@ -116,23 +115,23 @@ export default function ReportsPage() {
 
     const summaryRows = [
       [reportHeading],
-      [`Total ${reportType === 'sale' ? 'Sales' : 'Purchases'}: ${groupedData.grandTotal}`],
+      [`Total ${reportType === 'sale' ? 'Sales' : 'Purchases'}: Rs. ${groupedData.grandTotal}`],
       [],
       ['S.No', 'Product Name', 'Total Amount'],
-      ...groupedData.products.map((p, i) => [i + 1, p.name, p.totalAmount])
+      ...groupedData.products.map((p, i) => [i + 1, p.name, `Rs. ${p.totalAmount}`])
     ];
 
     const detailRows: any[] = [[]];
 
     groupedData.products.forEach((product) => {
       detailRows.push([]);
-      detailRows.push([`${reportType === 'sale' ? 'Sales' : 'Purchase'} of ${product.name} in ${reportMonth} ${reportYear}`]);
+      detailRows.push([product.name]); // ← Only product name
       detailRows.push(['S.No', reportType === 'sale' ? 'Customer Name' : 'Vendor Name', 'Amount']);
       
       product.entities.forEach((ent: any, index: number) => {
         const amountDisplay = ent.count > 1 
-          ? `${ent.amount.toLocaleString()} (${ent.count})` 
-          : ent.amount;
+          ? `Rs. ${ent.amount.toLocaleString()} (${ent.count})` 
+          : `Rs. ${ent.amount}`;
         detailRows.push([index + 1, ent.name, amountDisplay]);
       });
     });
@@ -158,7 +157,7 @@ export default function ReportsPage() {
     doc.setFontSize(18);
     doc.text(title, 14, 15);
     doc.setFontSize(12);
-    doc.text(`Total ${reportType === 'sale' ? 'Sales' : 'Purchases'}: ₹${groupedData.grandTotal.toLocaleString()}`, 14, 22);
+    doc.text(`Total ${reportType === 'sale' ? 'Sales' : 'Purchases'}: Rs. ${groupedData.grandTotal.toLocaleString()}`, 14, 22);
 
     autoTable(doc, {
       startY: 30,
@@ -166,7 +165,7 @@ export default function ReportsPage() {
       body: groupedData.products.map((p: any, index: number) => [
         index + 1,
         p.name,
-        `₹${p.totalAmount.toLocaleString()}`
+        `Rs. ${p.totalAmount.toLocaleString()}`
       ]),
       headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
       margin: { bottom: 10 }
@@ -182,7 +181,7 @@ export default function ReportsPage() {
 
       doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.text(`${reportType === 'sale' ? 'Sales' : 'Purchase'} of ${product.name} in ${reportMonth} ${reportYear}`, 14, finalY);
+      doc.text(product.name, 14, finalY); // ← Only product name
 
       autoTable(doc, {
         startY: finalY + 5,
@@ -191,8 +190,8 @@ export default function ReportsPage() {
           index + 1,
           ent.name,
           ent.count > 1 
-            ? `₹${ent.amount.toLocaleString()} (${ent.count})` 
-            : `₹${ent.amount.toLocaleString()}`
+            ? `Rs. ${ent.amount.toLocaleString()} (${ent.count})` 
+            : `Rs. ${ent.amount.toLocaleString()}`
         ]),
         headStyles: { fillColor: [209, 213, 219], textColor: [0, 0, 0] },
         styles: { fontSize: 10 },
@@ -280,7 +279,7 @@ export default function ReportsPage() {
           <p className="text-[10px] font-bold opacity-80 uppercase">
             Total {reportType === 'sale' ? 'Sales' : 'Purchases'}
           </p>
-          <p className="text-xl font-bold">₹{groupedData.grandTotal.toLocaleString()}</p>
+          <p className="text-xl font-bold">Rs. {groupedData.grandTotal.toLocaleString()}</p>
         </div>
       </div>
 
@@ -315,7 +314,7 @@ export default function ReportsPage() {
                   <td className="p-4 font-bold">{t.entities?.name || '—'}</td>
                   <td className="p-4">{t.products?.name || '—'}</td>
                   <td className={`p-4 text-right font-bold`}>
-                    ₹{Number(t.value).toLocaleString()}
+                    Rs. {Number(t.value).toLocaleString()}
                   </td>
                 </tr>
               ))
