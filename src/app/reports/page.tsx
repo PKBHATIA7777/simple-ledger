@@ -29,7 +29,18 @@ export default function ReportsPage() {
 
   async function fetchReportData() {
     setLoading(true)
-    // ✅ Use explicit inner joins to avoid null entities/products
+
+    // 🔑 Get current user to filter by user_id
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error("Auth error or no user:", authError?.message || "No authenticated user")
+      toast.error("You must be logged in to view reports.")
+      setTransactions([])
+      setLoading(false)
+      return
+    }
+
+    // ✅ Updated query: explicit joins + user_id filter
     const { data, error } = await supabase
       .from('transactions')
       .select(`
@@ -40,13 +51,14 @@ export default function ReportsPage() {
         entities!inner(id, name), 
         products!inner(id, name)
       `)
+      .eq('user_id', user.id) // ← Explicit user filter
       .eq('type', reportType)
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: false })
 
     if (error) {
-      console.error("Fetch error details:", error) // 🔍 Check browser console
+      console.error("Detailed Fetch Error:", error.message) // 🔍 As requested
       toast.error(`Error: ${error.message}`)
       setTransactions([])
     } else {
@@ -63,7 +75,6 @@ export default function ReportsPage() {
     let grandTotal = 0;
 
     transactions.forEach((t) => {
-      // After !inner join, these should always exist—but still guard defensively
       const productId = t.products?.id ?? 'unknown_' + Math.random().toString(36).substr(2, 9);
       const productName = t.products?.name?.trim() || 'Unknown Product';
       const entityId = t.entities?.id ?? 'unknown_' + Math.random().toString(36).substr(2, 9);
@@ -125,7 +136,7 @@ export default function ReportsPage() {
 
     groupedData.products.forEach((product) => {
       detailRows.push([]);
-      detailRows.push([product.name]); // ← Only product name
+      detailRows.push([product.name]);
       detailRows.push(['S.No', reportType === 'sale' ? 'Customer Name' : 'Vendor Name', 'Amount']);
       
       product.entities.forEach((ent: any, index: number) => {
@@ -181,7 +192,7 @@ export default function ReportsPage() {
 
       doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.text(product.name, 14, finalY); // ← Only product name
+      doc.text(product.name, 14, finalY);
 
       autoTable(doc, {
         startY: finalY + 5,
