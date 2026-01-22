@@ -154,6 +154,7 @@ export default function ReportsPage() {
     XLSX.writeFile(workbook, `${reportHeading.replace(/\s+/g, '_')}.xlsx`);
   }
 
+  // === UPDATED PDF EXPORT FUNCTION ===
   const exportToPDF = () => {
     const doc = new jsPDF();
     const monthNames = [
@@ -165,52 +166,97 @@ export default function ReportsPage() {
     const reportYear = new Date(startDate).getFullYear();
     const title = `${reportType === 'sale' ? 'Sales' : 'Purchase'} - ${reportMonth} ${reportYear}`;
     
+    // Header Section
     doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
     doc.text(title, 14, 15);
-    doc.setFontSize(12);
-    doc.text(`Total ${reportType === 'sale' ? 'Sales' : 'Purchases'}: Rs. ${groupedData.grandTotal.toLocaleString()}`, 14, 22);
 
-    autoTable(doc, {
-      startY: 30,
-      head: [['S.No', 'Product Name', 'Total Amount']],
-      body: groupedData.products.map((p: any, index: number) => [
-        index + 1,
-        p.name,
-        `Rs. ${p.totalAmount.toLocaleString()}`
-      ]),
-      headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
-      margin: { bottom: 10 }
-    });
+    // Main Focus: Total Amount (Increased size and Bold)
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    const totalText = `Total ${reportType === 'sale' ? 'Sales' : 'Purchases'}: Rs. ${groupedData.grandTotal.toLocaleString()}`;
+    doc.text(totalText, 14, 25);
 
-    let finalY = (doc as any).lastAutoTable.finalY + 15;
+    if (reportType === 'purchase') {
+      // === SIMPLIFIED PURCHASE RECORD PDF ===
+      
+      // Flatten all transactions into vendor-wise totals (ignoring products)
+      const vendorMap: Record<string, { name: string; amount: number }> = {};
+      transactions.forEach((t) => {
+        const vendorId = t.entities?.id || 'unknown';
+        const vendorName = t.entities?.name || 'Unknown Vendor';
+        const amount = Number(t.value);
 
-    groupedData.products.forEach((product: any) => {
-      if (finalY > 240) {
-        doc.addPage();
-        finalY = 20;
-      }
-
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "bold");
-      doc.text(product.name, 14, finalY);
-
-      autoTable(doc, {
-        startY: finalY + 5,
-        head: [['S.No', reportType === 'sale' ? 'Customer Name' : 'Vendor Name', 'Amount']],
-        body: product.entities.map((ent: any, index: number) => [
-          index + 1,
-          ent.name,
-          ent.count > 1 
-            ? `Rs. ${ent.amount.toLocaleString()} (${ent.count})` 
-            : `Rs. ${ent.amount.toLocaleString()}`
-        ]),
-        headStyles: { fillColor: [209, 213, 219], textColor: [0, 0, 0] },
-        styles: { fontSize: 10 },
-        margin: { bottom: 15 }
+        if (!vendorMap[vendorId]) {
+          vendorMap[vendorId] = { name: vendorName, amount: 0 };
+        }
+        vendorMap[vendorId].amount += amount;
       });
 
-      finalY = (doc as any).lastAutoTable.finalY + 15;
-    });
+      const sortedVendors = Object.values(vendorMap).sort((a, b) => b.amount - a.amount);
+
+      autoTable(doc, {
+        startY: 35,
+        head: [['S.No', 'Vendor Name', 'Purchase']],
+        body: sortedVendors.map((v, index) => [
+          index + 1,
+          v.name,
+          `Rs. ${v.amount.toLocaleString()}`
+        ]),
+        headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
+        styles: { fontSize: 11 },
+        margin: { bottom: 10 }
+      });
+
+    } else {
+      // === SALES REMAINS AS IT IS ===
+      
+      // Reset font for standard text
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+
+      autoTable(doc, {
+        startY: 35,
+        head: [['S.No', 'Product Name', 'Total Amount']],
+        body: groupedData.products.map((p: any, index: number) => [
+          index + 1,
+          p.name,
+          `Rs. ${p.totalAmount.toLocaleString()}`
+        ]),
+        headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
+        margin: { bottom: 10 }
+      });
+
+      let finalY = (doc as any).lastAutoTable.finalY + 15;
+
+      groupedData.products.forEach((product: any) => {
+        if (finalY > 240) {
+          doc.addPage();
+          finalY = 20;
+        }
+
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text(product.name, 14, finalY);
+
+        autoTable(doc, {
+          startY: finalY + 5,
+          head: [['S.No', 'Customer Name', 'Amount']],
+          body: product.entities.map((ent: any, index: number) => [
+            index + 1,
+            ent.name,
+            ent.count > 1 
+              ? `Rs. ${ent.amount.toLocaleString()} (${ent.count})` 
+              : `Rs. ${ent.amount.toLocaleString()}`
+          ]),
+          headStyles: { fillColor: [209, 213, 219], textColor: [0, 0, 0] },
+          styles: { fontSize: 10 },
+          margin: { bottom: 15 }
+        });
+
+        finalY = (doc as any).lastAutoTable.finalY + 15;
+      });
+    }
 
     doc.save(`${title.replace(/\s+/g, '_')}.pdf`);
   };
