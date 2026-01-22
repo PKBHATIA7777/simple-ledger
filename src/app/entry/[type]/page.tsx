@@ -40,7 +40,7 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
       const { data: entData, error: entError } = await supabase
         .from('entities')
         .select('id, name')
-        .eq('user_id', user.id) // ✅ Added filter
+        .eq('user_id', user.id)
         .eq('type', entityType)
         .order('name')
 
@@ -53,7 +53,7 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
       const { data: prodData, error: prodError } = await supabase
         .from('products')
         .select('id, name')
-        .eq('user_id', user.id) // ✅ Added filter
+        .eq('user_id', user.id)
         .order('name')
 
       if (prodError) {
@@ -75,8 +75,9 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
       return toast.error('Invalid transaction type')
     }
 
-    const entityName = selectedEntity?.name.trim()
-    const productName = selectedProduct?.name.trim()
+    // ✅ Use selected object's name OR raw search text as fallback
+    const entityName = selectedEntity ? selectedEntity.name.trim() : entitySearch.trim()
+    const productName = selectedProduct ? selectedProduct.name.trim() : productSearch.trim()
 
     if (!entityName || !productName || !value) {
       return toast.error('Please fill in all fields')
@@ -115,7 +116,20 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
       setValue('')
       setEntitySearch('')
       setProductSearch('')
-      // Date remains unchanged
+
+      // ✅ Refresh local suggestion lists so new items appear immediately
+      const { data: entData } = await supabase
+        .from('entities')
+        .select('id, name')
+        .eq('user_id', userId)
+        .eq('type', entityType)
+      const { data: prodData } = await supabase
+        .from('products')
+        .select('id, name')
+        .eq('user_id', userId)
+
+      setEntities(entData || [])
+      setProducts(prodData || [])
 
     } catch (error: any) {
       console.error('Transaction Error:', error)
@@ -171,16 +185,20 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
                           key={entity.id}
                           onClick={() => {
                             setSelectedEntity(entity)
-                            setEntitySearch('')
+                            setEntitySearch(entity.name) // ✅ Keep name in input for clarity
                           }}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm border-b last:border-0"
                         >
                           {entity.name}
                         </button>
                       ))}
-                    {entities.filter(e => e.name.toLowerCase().includes(entitySearch.toLowerCase())).length === 0 && (
-                      <div className="px-4 py-2 text-gray-500 text-sm">No results found</div>
-                    )}
+                    {/* ✅ Add New Entity Button */}
+                    <button
+                      onClick={() => setSelectedEntity({ id: 'new', name: entitySearch })}
+                      className="w-full text-left px-4 py-3 hover:bg-blue-50 text-blue-600 text-sm font-bold italic"
+                    >
+                      + Add "{entitySearch}" as new {entityType}
+                    </button>
                   </div>
                 )}
               </div>
@@ -188,7 +206,10 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
               <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-xl">
                 <span className="text-blue-700 font-medium">{selectedEntity.name}</span>
                 <button
-                  onClick={() => setSelectedEntity(null)}
+                  onClick={() => {
+                    setSelectedEntity(null)
+                    setEntitySearch('')
+                  }}
                   className="text-blue-400 hover:text-blue-600 font-bold"
                 >
                   ✕
@@ -218,16 +239,20 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
                           key={product.id}
                           onClick={() => {
                             setSelectedProduct(product)
-                            setProductSearch('')
+                            setProductSearch(product.name) // ✅ Keep name in input
                           }}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                          className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm border-b last:border-0"
                         >
                           {product.name}
                         </button>
                       ))}
-                    {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
-                      <div className="px-4 py-2 text-gray-500 text-sm">No results found</div>
-                    )}
+                    {/* ✅ Add New Product Button */}
+                    <button
+                      onClick={() => setSelectedProduct({ id: 'new', name: productSearch })}
+                      className="w-full text-left px-4 py-3 hover:bg-green-50 text-green-600 text-sm font-bold italic"
+                    >
+                      + Add "{productSearch}" as new product
+                    </button>
                   </div>
                 )}
               </div>
@@ -235,7 +260,10 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
               <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
                 <span className="text-green-700 font-medium">{selectedProduct.name}</span>
                 <button
-                  onClick={() => setSelectedProduct(null)}
+                  onClick={() => {
+                    setSelectedProduct(null)
+                    setProductSearch('')
+                  }}
                   className="text-green-400 hover:text-green-600 font-bold"
                 >
                   ✕
@@ -262,7 +290,7 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="w-full py-4 bg-blue-600 text-primary-action rounded-xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition mt-4 disabled:opacity-50"
+            className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition mt-4 disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save Record'}
           </button>

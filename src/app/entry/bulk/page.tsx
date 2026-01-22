@@ -28,11 +28,16 @@ export default function BulkEntry() {
   }
 
   const handleSaveAll = async () => {
-    // Filter out incomplete rows
-    const validRows = rows.filter(
-      r => r.entity.trim() && r.product.trim() && r.value && !isNaN(parseFloat(r.value)) && parseFloat(r.value) > 0
-    )
-    
+    // ✅ Clean and validate rows: trim names and parse values
+    const validRows = rows
+      .map(r => ({
+        ...r,
+        entity: r.entity.trim(),
+        product: r.product.trim(),
+        value: parseFloat(r.value),
+      }))
+      .filter(r => r.entity && r.product && !isNaN(r.value) && r.value > 0)
+
     if (validRows.length === 0) {
       return toast.error("No valid entries to save")
     }
@@ -44,17 +49,16 @@ export default function BulkEntry() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Please login first")
 
-      // Prepare the JSON payload as expected by the RPC
+      // Prepare payload with cleaned data
       const payload = validRows.map(row => ({
-        entity: row.entity.trim(),
-        product: row.product.trim(),
-        value: parseFloat(row.value),
+        entity: row.entity,
+        product: row.product,
+        value: row.value,
         date: `${duration}-01`, // First day of selected month
         type: type,
         entity_type: type === 'sale' ? 'customer' : 'vendor'
       }))
 
-      // Single RPC call for all records
       const { error } = await supabase.rpc('process_bulk_entries', {
         p_user_id: user.id,
         p_entries: payload
@@ -62,7 +66,11 @@ export default function BulkEntry() {
 
       if (error) throw error
 
-      toast.success(`${validRows.length} records saved successfully!`, { id: toastId })
+      // ✅ Enhanced success feedback
+      toast.success(`${validRows.length} records saved! Any new contacts or products have been added to your catalog.`, { 
+        id: toastId,
+        duration: 5000 
+      })
       router.push('/dashboard')
     } catch (err: any) {
       console.error('Bulk Save Error:', err)
@@ -213,7 +221,7 @@ export default function BulkEntry() {
         <button 
           onClick={handleSaveAll} 
           disabled={isSaving}
-          className="flex-1 py-4 bg-blue-600 text-primary-action rounded-2xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition disabled:opacity-50"
+          className="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg hover:bg-blue-700 active:scale-95 transition disabled:opacity-50"
         >
           {isSaving ? "Saving..." : "Save All Entries"}
         </button>
