@@ -29,29 +29,28 @@ export default function ReportsPage() {
 
   async function fetchReportData() {
     setLoading(true)
+    // ✅ Use explicit inner joins to avoid null entities/products
     const { data, error } = await supabase
       .from('transactions')
-      .select('*, entities(name), products(name)')
+      .select(`
+        id,
+        date,
+        value,
+        type,
+        entities!inner(id, name), 
+        products!inner(id, name)
+      `)
       .eq('type', reportType)
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: false })
 
     if (error) {
-      toast.error(`Failed to load ${reportType} report`)
+      console.error("Fetch error details:", error) // 🔍 Check browser console
+      toast.error(`Error: ${error.message}`)
       setTransactions([])
     } else {
-      console.log("Fetched transactions:", data);
       setTransactions(data || [])
-      
-      data?.forEach((t, i) => {
-        if (!t.products?.id) {
-          console.warn(`Transaction ${i + 1}: Missing products.id →`, t);
-        }
-        if (!t.entities?.id) {
-          console.warn(`Transaction ${i + 1}: Missing entities.id →`, t);
-        }
-      });
     }
     setLoading(false)
   }
@@ -64,6 +63,7 @@ export default function ReportsPage() {
     let grandTotal = 0;
 
     transactions.forEach((t) => {
+      // After !inner join, these should always exist—but still guard defensively
       const productId = t.products?.id ?? 'unknown_' + Math.random().toString(36).substr(2, 9);
       const productName = t.products?.name?.trim() || 'Unknown Product';
       const entityId = t.entities?.id ?? 'unknown_' + Math.random().toString(36).substr(2, 9);
@@ -220,7 +220,7 @@ export default function ReportsPage() {
           <button
             onClick={() => setReportType('sale')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-              reportType === 'sale' ? 'bg-green-600 text-primary-action' : 'text-gray-500'
+              reportType === 'sale' ? 'bg-green-600 text-white' : 'text-gray-500'
             }`}
           >
             Sales
@@ -228,7 +228,7 @@ export default function ReportsPage() {
           <button
             onClick={() => setReportType('purchase')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-              reportType === 'purchase' ? 'bg-blue-600 text-primary-action' : 'text-gray-500'
+              reportType === 'purchase' ? 'bg-blue-600 text-white' : 'text-gray-500'
             }`}
           >
             Purchases
@@ -272,7 +272,7 @@ export default function ReportsPage() {
           </div>
         </div>
         <div
-          className={`p-4 rounded-xl shadow-sm text-primary-action ${
+          className={`p-4 rounded-xl shadow-sm text-white ${
             reportType === 'sale' ? 'bg-green-600' : 'bg-blue-600'
           }`}
         >
