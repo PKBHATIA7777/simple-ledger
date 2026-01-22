@@ -30,13 +30,17 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
   // Fetch suggestions on load
   useEffect(() => {
     async function loadSuggestions() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        console.error('Authentication error or no user found:', authError)
+        return
+      }
 
-      // Fetch entities
+      // Fetch entities scoped to user
       const { data: entData, error: entError } = await supabase
         .from('entities')
         .select('id, name')
+        .eq('user_id', user.id) // ✅ Added filter
         .eq('type', entityType)
         .order('name')
 
@@ -45,10 +49,11 @@ export default function EntryPage({ params }: { params: Promise<{ type: string }
         return
       }
 
-      // Fetch products
+      // Fetch products scoped to user
       const { data: prodData, error: prodError } = await supabase
         .from('products')
         .select('id, name')
+        .eq('user_id', user.id) // ✅ Added filter
         .order('name')
 
       if (prodError) {

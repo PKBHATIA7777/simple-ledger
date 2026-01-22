@@ -16,8 +16,28 @@ export default function ProductsPage() {
   }, [])
 
   async function fetchProducts() {
-    const { data } = await supabase.from('products').select('*').order('name', { ascending: true })
-    if (data) setProducts(data)
+    setLoading(true)
+
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error('Authentication error or no user found:', authError)
+      setLoading(false)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('user_id', user.id) // Only show products belonging to this user
+      .order('name', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching products:', error)
+      setProducts([])
+    } else if (data) {
+      setProducts(data)
+    }
     setLoading(false)
   }
 

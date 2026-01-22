@@ -1,5 +1,4 @@
 // src/app/dashboard/page.tsx
-
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -16,38 +15,45 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      // ✅ Ensure user is authenticated
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        console.error('Authentication failed:', authError)
         router.push('/')
         return
       }
 
-      // 1. Fetch Profile and check onboarding status
-      const { data: profile } = await supabase
+      // ✅ Fetch profile (scoped by user.id via primary key)
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('company_name')
         .eq('id', user.id)
         .maybeSingle()
 
-      if (!profile) {
+      if (profileError || !profile) {
+        console.warn('Profile not found or error:', profileError)
         router.push('/onboarding')
         return
       }
 
       setCompanyName(profile.company_name)
 
-      // 2. Fetch Optimized Stats via RPC
+      // ✅ Fetch stats via secure RPC (already filtered by user.id)
       const { data, error } = await supabase.rpc('get_monthly_stats', {
-        p_user_id: user.id,
+        p_user_id: user.id, // 🔒 This ensures only the user's data is returned
       })
 
       if (error) {
+        console.error('Error fetching stats:', error)
         toast.error('Failed to load statistics')
+        setStats({ sales: 0, purchases: 0 })
       } else if (data && data.length > 0) {
         setStats({
-          sales: Number(data[0].total_sales),
-          purchases: Number(data[0].total_purchases),
+          sales: Number(data[0].total_sales || 0),
+          purchases: Number(data[0].total_purchases || 0),
         })
+      } else {
+        setStats({ sales: 0, purchases: 0 })
       }
     }
 

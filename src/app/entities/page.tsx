@@ -17,8 +17,28 @@ export default function EntitiesPage() {
   }, [])
 
   async function fetchEntities() {
-    const { data } = await supabase.from('entities').select('*').order('name', { ascending: true })
-    if (data) setEntities(data)
+    setLoading(true)
+
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.error('Authentication error or no user found:', authError)
+      setLoading(false)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('entities')
+      .select('*')
+      .eq('user_id', user.id) // Explicit security filter
+      .order('name', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching entities:', error)
+      setEntities([])
+    } else if (data) {
+      setEntities(data)
+    }
     setLoading(false)
   }
 
